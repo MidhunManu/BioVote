@@ -1,0 +1,29 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "audit_logs",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "booth_id", "order": "ASCENDING" },
+        { "fieldPath": "timestamp", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "voters",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "booth_id", "order": "ASCENDING" },
+        { "fieldPath": "has_voted", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "booth_officers",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "employee_code", "order": "ASCENDING" },
+        { "fieldPath": "is_active", "order": "ASCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}

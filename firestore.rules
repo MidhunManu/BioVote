@@ -1,0 +1,29 @@
+// firestore.rules
+// Deploy with: firebase deploy --only firestore:rules
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Voters — backend only (no direct client access)
+    match /voters/{voterId} {
+      allow read, write: if false; // Only accessible via backend service account
+    }
+
+    // Audit logs — read-only for authenticated users, write via backend only
+    match /audit_logs/{logId} {
+      allow read: if false;  // Backend only
+      allow write: if false; // Backend only
+    }
+
+    // Booth officers — backend only
+    match /booth_officers/{officerId} {
+      allow read, write: if false;
+    }
+
+    // Booths — read-only from backend service account
+    match /booths/{boothId} {
+      allow read, write: if false;
+    }
+  }
+}
