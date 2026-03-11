@@ -1,0 +1,851 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BioVote — API Demo Dashboard</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0a0e1a;
+      --surface: #111827;
+      --surface2: #1a2235;
+      --border: #1e2a3a;
+      --accent: #6366f1;
+      --accent-glow: rgba(99, 102, 241, 0.15);
+      --green: #10b981;
+      --green-glow: rgba(16, 185, 129, 0.15);
+      --red: #ef4444;
+      --red-glow: rgba(239, 68, 68, 0.1);
+      --yellow: #f59e0b;
+      --yellow-glow: rgba(245, 158, 11, 0.1);
+      --text: #e2e8f0;
+      --text-dim: #94a3b8;
+      --text-muted: #64748b;
+      --radius: 12px;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Inter', -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* Subtle grid background */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(99, 102, 241, 0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(99, 102, 241, 0.03) 1px, transparent 1px);
+      background-size: 40px 40px;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .container {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 32px 24px;
+      position: relative;
+      z-index: 1;
+    }
+
+    /* Header */
+    .header {
+      text-align: center;
+      margin-bottom: 36px;
+    }
+
+    .header .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: var(--accent-glow);
+      border: 1px solid rgba(99, 102, 241, 0.25);
+      color: #a5b4fc;
+      font-size: 12px;
+      font-weight: 600;
+      padding: 5px 14px;
+      border-radius: 20px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 16px;
+    }
+
+    .header h1 {
+      font-size: 32px;
+      font-weight: 800;
+      background: linear-gradient(135deg, #e2e8f0 0%, #a5b4fc 50%, #6366f1 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 8px;
+    }
+
+    .header p {
+      color: var(--text-dim);
+      font-size: 15px;
+    }
+
+    /* Status bar */
+    .status-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 14px 20px;
+      margin-bottom: 24px;
+    }
+
+    .status-bar .left {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 14px;
+      color: var(--text-dim);
+    }
+
+    .status-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--green);
+      box-shadow: 0 0 8px var(--green);
+      animation: pulse 2s infinite;
+    }
+
+    .status-dot.off {
+      background: var(--red);
+      box-shadow: 0 0 8px var(--red);
+      animation: none;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+
+    .status-bar .token-status {
+      font-size: 12px;
+      padding: 4px 12px;
+      border-radius: 6px;
+      font-weight: 600;
+    }
+
+    .token-status.active {
+      background: var(--green-glow);
+      color: var(--green);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+    }
+
+    .token-status.inactive {
+      background: var(--red-glow);
+      color: var(--red);
+      border: 1px solid rgba(239, 68, 68, 0.2);
+    }
+
+    /* Main Layout */
+    .main-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 20px;
+    }
+
+    /* Card */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      transition: border-color 0.2s;
+    }
+
+    .card:hover { border-color: rgba(99, 102, 241, 0.3); }
+
+    .card-header {
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .card-header h2 {
+      font-size: 15px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .card-body { padding: 20px; }
+
+    /* Dropdown */
+    .endpoint-select-wrapper {
+      position: relative;
+      margin-bottom: 20px;
+    }
+
+    .endpoint-select-wrapper label {
+      display: block;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 8px;
+    }
+
+    select {
+      width: 100%;
+      padding: 12px 16px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      font-family: 'Inter', sans-serif;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 14px center;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+
+    select:focus {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-glow);
+    }
+
+    /* Method badge */
+    .method {
+      display: inline-block;
+      padding: 3px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .method.get { background: rgba(16, 185, 129, 0.15); color: var(--green); }
+    .method.post { background: rgba(99, 102, 241, 0.15); color: #a5b4fc; }
+
+    /* URL display */
+    .url-display {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px 16px;
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      font-size: 13px;
+      color: var(--text-dim);
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      overflow-x: auto;
+    }
+
+    .url-display .path { color: var(--text); }
+
+    /* Form fields */
+    .form-group {
+      margin-bottom: 14px;
+    }
+
+    .form-group label {
+      display: block;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-dim);
+      margin-bottom: 6px;
+    }
+
+    input, textarea {
+      width: 100%;
+      padding: 10px 14px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      font-family: 'Inter', sans-serif;
+      font-size: 13px;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+
+    input:focus, textarea:focus {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-glow);
+    }
+
+    textarea {
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      font-size: 12px;
+      resize: vertical;
+      min-height: 80px;
+    }
+
+    /* Buttons */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 11px 24px;
+      border-radius: 8px;
+      font-family: 'Inter', sans-serif;
+      font-size: 14px;
+      font-weight: 600;
+      border: none;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #6366f1, #4f46e5);
+      color: white;
+      box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+    }
+
+    .btn-primary:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 6px 20px rgba(99, 102, 241, 0.4);
+    }
+
+    .btn-primary:active { transform: translateY(0); }
+
+    .btn-primary.loading {
+      opacity: 0.7;
+      pointer-events: none;
+    }
+
+    .btn-secondary {
+      background: var(--surface2);
+      color: var(--text-dim);
+      border: 1px solid var(--border);
+    }
+
+    .btn-secondary:hover {
+      background: var(--border);
+      color: var(--text);
+    }
+
+    .btn-group {
+      display: flex;
+      gap: 10px;
+      margin-top: 8px;
+    }
+
+    /* Response area */
+    .response-area {
+      margin-top: 20px;
+    }
+
+    .response-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 10px;
+    }
+
+    .response-header h3 {
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--text-muted);
+    }
+
+    .http-status {
+      font-size: 12px;
+      font-weight: 700;
+      padding: 3px 10px;
+      border-radius: 4px;
+    }
+
+    .http-status.s2xx { background: var(--green-glow); color: var(--green); }
+    .http-status.s4xx { background: var(--yellow-glow); color: var(--yellow); }
+    .http-status.s5xx { background: var(--red-glow); color: var(--red); }
+
+    .response-body {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px;
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      font-size: 12px;
+      line-height: 1.6;
+      color: var(--text-dim);
+      max-height: 400px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .response-body .key { color: #a5b4fc; }
+    .response-body .string { color: #34d399; }
+    .response-body .number { color: #fbbf24; }
+    .response-body .boolean { color: #f472b6; }
+    .response-body .null-val { color: var(--text-muted); }
+
+    /* Prefilled data cards */
+    .test-data {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 14px 16px;
+      margin-bottom: 16px;
+    }
+
+    .test-data h4 {
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 10px;
+    }
+
+    .test-data-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 8px;
+    }
+
+    .test-item {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 8px 12px;
+      cursor: pointer;
+      transition: all 0.15s;
+      font-size: 12px;
+    }
+
+    .test-item:hover {
+      border-color: var(--accent);
+      background: var(--accent-glow);
+    }
+
+    .test-item .name {
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 2px;
+    }
+
+    .test-item .detail {
+      color: var(--text-muted);
+      font-family: 'SF Mono', monospace;
+      font-size: 11px;
+    }
+
+    .test-item .voted-badge {
+      display: inline-block;
+      background: var(--red-glow);
+      color: var(--red);
+      font-size: 9px;
+      font-weight: 700;
+      padding: 1px 6px;
+      border-radius: 3px;
+      margin-left: 6px;
+    }
+
+    /* Description */
+    .endpoint-desc {
+      color: var(--text-dim);
+      font-size: 13px;
+      line-height: 1.5;
+      margin-bottom: 16px;
+      padding: 10px 14px;
+      background: var(--accent-glow);
+      border-left: 3px solid var(--accent);
+      border-radius: 0 6px 6px 0;
+    }
+
+    .hidden { display: none !important; }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+    /* Time display */
+    .response-time {
+      font-size: 11px;
+      color: var(--text-muted);
+      font-family: 'SF Mono', monospace;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- Header -->
+    <div class="header">
+      <div class="badge">🗳️ Election Commission of India</div>
+      <h1>BioVote API Dashboard</h1>
+      <p>Biometric Voter Verification System — Interactive Demo</p>
+    </div>
+
+    <!-- Status Bar -->
+    <div class="status-bar">
+      <div class="left">
+        <div class="status-dot" id="serverDot"></div>
+        <span id="serverStatus">Checking server...</span>
+      </div>
+      <div class="token-status inactive" id="tokenBadge">No Token</div>
+    </div>
+
+    <!-- Main Card -->
+    <div class="card">
+      <div class="card-header">
+        <h2>⚡ API Explorer</h2>
+      </div>
+      <div class="card-body">
+        <!-- Endpoint Selector -->
+        <div class="endpoint-select-wrapper">
+          <label>Select Endpoint</label>
+          <select id="endpointSelect" onchange="onEndpointChange()">
+            <option value="" disabled selected>— Choose an API endpoint —</option>
+            <option value="health">GET  /health</option>
+            <option value="login">POST /api/v1/auth/login</option>
+            <option value="lookup">GET  /api/v1/voters/lookup</option>
+            <option value="verify">POST /api/v1/voters/verify</option>
+            <option value="dashboard">GET  /api/v1/booth/dashboard</option>
+            <option value="audit">GET  /api/v1/booth/audit</option>
+          </select>
+        </div>
+
+        <!-- URL Display -->
+        <div class="url-display" id="urlDisplay">
+          <span class="method get" id="urlMethod">GET</span>
+          <span class="path" id="urlPath">Select an endpoint above</span>
+        </div>
+
+        <!-- Description -->
+        <div class="endpoint-desc hidden" id="endpointDesc"></div>
+
+        <!-- Dynamic Form Fields -->
+        <div id="formFields"></div>
+
+        <!-- Test Data Quick-Fill -->
+        <div id="testData" class="hidden"></div>
+
+        <!-- Action Buttons -->
+        <div class="btn-group">
+          <button class="btn btn-primary" id="sendBtn" onclick="sendRequest()" disabled>
+            🚀 Send Request
+          </button>
+          <button class="btn btn-secondary" onclick="clearResponse()">Clear</button>
+        </div>
+
+        <!-- Response -->
+        <div class="response-area hidden" id="responseArea">
+          <div class="response-header">
+            <h3>Response</h3>
+            <div style="display:flex; align-items:center; gap:10px;">
+              <span class="response-time" id="responseTime"></span>
+              <span class="http-status" id="httpStatus"></span>
+            </div>
+          </div>
+          <div class="response-body" id="responseBody"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const BASE = 'http://localhost:8080';
+    let token = '';
+
+    const ENDPOINTS = {
+      health: {
+        method: 'GET',
+        path: '/health',
+        desc: 'Health check — no authentication required. Returns server status.',
+        fields: [],
+        auth: false,
+      },
+      login: {
+        method: 'POST',
+        path: '/api/v1/auth/login',
+        desc: 'Authenticate a booth officer with employee code and password. Returns a JWT token valid for 12 hours.',
+        fields: [
+          { id: 'employee_code', label: 'Employee Code', value: 'ECI-MH-042' },
+          { id: 'password', label: 'Password', value: 'officer123', type: 'password' },
+        ],
+        auth: false,
+      },
+      lookup: {
+        method: 'GET',
+        path: '/api/v1/voters/lookup',
+        desc: 'Look up a voter by Aadhaar number before biometric scan. Returns public-safe voter info (no biometric data).',
+        fields: [
+          { id: 'aadhaar', label: 'Aadhaar Number (12 digits)', value: '234567890123' },
+        ],
+        auth: true,
+      },
+      verify: {
+        method: 'POST',
+        path: '/api/v1/voters/verify',
+        desc: 'Full verification pipeline: Aadhaar lookup → booth check → iris biometric match → duplicate guard → mark as voted. Creates an immutable audit log entry.',
+        fields: [
+          { id: 'aadhaar_number', label: 'Aadhaar Number', value: '234567890123' },
+          { id: 'iris_scan', label: 'Iris Scan Code', value: 'IRIS_PRIYA_SHARMA_2024' },
+          { id: 'biometric_type', label: 'Biometric Type', value: 'IRIS' },
+        ],
+        auth: true,
+        testData: [
+          { name: 'Priya Sharma', aadhaar: '234567890123', iris: 'IRIS_PRIYA_SHARMA_2024' },
+          { name: 'Rahul Mehta', aadhaar: '345678901234', iris: 'IRIS_RAHUL_MEHTA_2024' },
+          { name: 'Ananya Krishnan', aadhaar: '456789012345', iris: 'IRIS_ANANYA_KRISHNAN_2024' },
+          { name: 'Vikram Singh', aadhaar: '567890123456', iris: 'IRIS_VIKRAM_SINGH_2024' },
+          { name: 'Meena Patel', aadhaar: '678901234567', iris: 'IRIS_MEENA_PATEL_2024' },
+          { name: 'Arjun Nair', aadhaar: '789012345678', iris: 'IRIS_ARJUN_NAIR_2024' },
+          { name: 'Sunita Reddy', aadhaar: '890123456789', iris: 'IRIS_SUNITA_REDDY_2024', voted: true },
+          { name: 'Deepak Joshi', aadhaar: '901234567890', iris: 'IRIS_DEEPAK_JOSHI_2024' },
+        ],
+      },
+      dashboard: {
+        method: 'GET',
+        path: '/api/v1/booth/dashboard',
+        desc: 'Live turnout statistics for the officer\'s assigned booth — total voters, votes cast, pending, and turnout percentage.',
+        fields: [],
+        auth: true,
+      },
+      audit: {
+        method: 'GET',
+        path: '/api/v1/booth/audit',
+        desc: 'Paginated, immutable audit trail of all verification attempts at this booth. Each entry has a tamper-evident tx_hash.',
+        fields: [
+          { id: 'limit', label: 'Limit (max 200)', value: '50' },
+        ],
+        auth: true,
+      },
+    };
+
+    // Voters for lookup quick-fill
+    const VOTERS = [
+      { name: 'Priya Sharma', aadhaar: '234567890123' },
+      { name: 'Rahul Mehta', aadhaar: '345678901234' },
+      { name: 'Ananya Krishnan', aadhaar: '456789012345' },
+      { name: 'Vikram Singh', aadhaar: '567890123456' },
+      { name: 'Meena Patel', aadhaar: '678901234567' },
+      { name: 'Arjun Nair', aadhaar: '789012345678' },
+      { name: 'Sunita Reddy', aadhaar: '890123456789', voted: true },
+      { name: 'Deepak Joshi', aadhaar: '901234567890' },
+    ];
+
+    // Check server
+    async function checkServer() {
+      try {
+        const r = await fetch(BASE + '/health');
+        if (r.ok) {
+          document.getElementById('serverDot').className = 'status-dot';
+          document.getElementById('serverStatus').textContent = 'Server running on :8080';
+        } else { throw ''; }
+      } catch {
+        document.getElementById('serverDot').className = 'status-dot off';
+        document.getElementById('serverStatus').textContent = 'Server offline';
+      }
+    }
+
+    function updateTokenBadge() {
+      const badge = document.getElementById('tokenBadge');
+      if (token) {
+        badge.className = 'token-status active';
+        badge.textContent = '🔑 Authenticated';
+      } else {
+        badge.className = 'token-status inactive';
+        badge.textContent = 'No Token';
+      }
+    }
+
+    function onEndpointChange() {
+      const key = document.getElementById('endpointSelect').value;
+      if (!key) return;
+      const ep = ENDPOINTS[key];
+
+      // URL display
+      const methodEl = document.getElementById('urlMethod');
+      methodEl.textContent = ep.method;
+      methodEl.className = 'method ' + ep.method.toLowerCase();
+      document.getElementById('urlPath').textContent = BASE + ep.path;
+
+      // Description
+      const descEl = document.getElementById('endpointDesc');
+      descEl.textContent = ep.desc;
+      descEl.classList.remove('hidden');
+
+      // Form fields
+      const fieldsEl = document.getElementById('formFields');
+      fieldsEl.innerHTML = ep.fields.map(f => `
+        <div class="form-group">
+          <label for="${f.id}">${f.label}</label>
+          <input type="${f.type || 'text'}" id="field_${f.id}" value="${f.value || ''}" placeholder="${f.label}">
+        </div>
+      `).join('');
+
+      // Test data
+      const testEl = document.getElementById('testData');
+      if (key === 'verify' && ep.testData) {
+        testEl.innerHTML = `
+          <div class="test-data">
+            <h4>⚡ Quick Fill — Click a voter</h4>
+            <div class="test-data-grid">
+              ${ep.testData.map(v => `
+                <div class="test-item" onclick="fillVerify('${v.aadhaar}','${v.iris}')">
+                  <div class="name">${v.name}${v.voted ? '<span class="voted-badge">VOTED</span>' : ''}</div>
+                  <div class="detail">${v.aadhaar}</div>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        `;
+        testEl.classList.remove('hidden');
+      } else if (key === 'lookup') {
+        testEl.innerHTML = `
+          <div class="test-data">
+            <h4>⚡ Quick Fill — Click a voter</h4>
+            <div class="test-data-grid">
+              ${VOTERS.map(v => `
+                <div class="test-item" onclick="fillLookup('${v.aadhaar}')">
+                  <div class="name">${v.name}${v.voted ? '<span class="voted-badge">VOTED</span>' : ''}</div>
+                  <div class="detail">${v.aadhaar}</div>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        `;
+        testEl.classList.remove('hidden');
+      } else {
+        testEl.classList.add('hidden');
+      }
+
+      document.getElementById('sendBtn').disabled = false;
+    }
+
+    function fillVerify(aadhaar, iris) {
+      document.getElementById('field_aadhaar_number').value = aadhaar;
+      document.getElementById('field_iris_scan').value = iris;
+    }
+
+    function fillLookup(aadhaar) {
+      document.getElementById('field_aadhaar').value = aadhaar;
+    }
+
+    async function sendRequest() {
+      const key = document.getElementById('endpointSelect').value;
+      if (!key) return;
+      const ep = ENDPOINTS[key];
+
+      // Auth check
+      if (ep.auth && !token) {
+        showResponse(401, { error: 'NO_TOKEN', message: 'Please login first to get a JWT token.' }, 0);
+        return;
+      }
+
+      const btn = document.getElementById('sendBtn');
+      btn.classList.add('loading');
+      btn.textContent = '⏳ Sending...';
+
+      const start = performance.now();
+
+      try {
+        let url = BASE + ep.path;
+        const headers = {};
+        let options = { method: ep.method, headers };
+
+        if (ep.auth) headers['Authorization'] = 'Bearer ' + token;
+
+        if (ep.method === 'GET') {
+          // Add query params
+          if (key === 'lookup') {
+            url += '?aadhaar=' + (document.getElementById('field_aadhaar')?.value || '');
+          } else if (key === 'audit') {
+            url += '?limit=' + (document.getElementById('field_limit')?.value || '50');
+          }
+        } else if (ep.method === 'POST') {
+          headers['Content-Type'] = 'application/json';
+          const body = {};
+          ep.fields.forEach(f => {
+            body[f.id] = document.getElementById('field_' + f.id)?.value || '';
+          });
+          options.body = JSON.stringify(body);
+        }
+
+        options.headers = headers;
+        const res = await fetch(url, options);
+        const elapsed = Math.round(performance.now() - start);
+        const data = await res.json();
+
+        // Save token on login
+        if (key === 'login' && res.ok && data.token) {
+          token = data.token;
+          updateTokenBadge();
+        }
+
+        showResponse(res.status, data, elapsed);
+      } catch (err) {
+        showResponse(0, { error: 'NETWORK_ERROR', message: err.message }, 0);
+      }
+
+      btn.classList.remove('loading');
+      btn.textContent = '🚀 Send Request';
+    }
+
+    function showResponse(status, data, elapsed) {
+      const area = document.getElementById('responseArea');
+      area.classList.remove('hidden');
+
+      // Status badge
+      const statusEl = document.getElementById('httpStatus');
+      statusEl.textContent = status || 'ERR';
+      if (status >= 200 && status < 300) statusEl.className = 'http-status s2xx';
+      else if (status >= 400 && status < 500) statusEl.className = 'http-status s4xx';
+      else statusEl.className = 'http-status s5xx';
+
+      // Timing
+      document.getElementById('responseTime').textContent = elapsed ? elapsed + 'ms' : '';
+
+      // Syntax-highlighted JSON
+      document.getElementById('responseBody').innerHTML = syntaxHighlight(JSON.stringify(data, null, 2));
+    }
+
+    function syntaxHighlight(json) {
+      return json.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/("(\\u[\da-fA-F]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false)\b|-?\d+(\.\d+)?([eE][+-]?\d+)?|\bnull\b)/g,
+          function(match) {
+            let cls = 'number';
+            if (/^"/.test(match)) {
+              cls = /:$/.test(match) ? 'key' : 'string';
+            } else if (/true|false/.test(match)) {
+              cls = 'boolean';
+            } else if (/null/.test(match)) {
+              cls = 'null-val';
+            }
+            return '<span class="' + cls + '">' + match + '</span>';
+          });
+    }
+
+    function clearResponse() {
+      document.getElementById('responseArea').classList.add('hidden');
+    }
+
+    // Init
+    checkServer();
+    setInterval(checkServer, 10000);
+  </script>
+</body>
+</html>

@@ -1,4 +1,4 @@
-package services
+package main
 
 import (
 	"context"
@@ -8,8 +8,6 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
-	fb "github.com/eci/voter-verification/internal/firebase"
-	"github.com/eci/voter-verification/internal/models"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -36,8 +34,8 @@ func NewAuthService(ctx context.Context) *AuthService {
 }
 
 // Login authenticates a booth officer and returns a JWT
-func (s *AuthService) Login(req models.LoginRequest) (*models.LoginResponse, error) {
-	fs := fb.Get().Firestore
+func (s *AuthService) Login(req LoginRequest) (*LoginResponse, error) {
+	fs := Get().Firestore
 
 	// Find officer by employee code
 	docs, err := fs.Collection(ColOfficers).
@@ -50,7 +48,7 @@ func (s *AuthService) Login(req models.LoginRequest) (*models.LoginResponse, err
 		return nil, fmt.Errorf("invalid credentials")
 	}
 
-	var officer models.BoothOfficer
+	var officer BoothOfficer
 	if err := docs[0].DataTo(&officer); err != nil {
 		return nil, fmt.Errorf("officer data error")
 	}
@@ -81,7 +79,7 @@ func (s *AuthService) Login(req models.LoginRequest) (*models.LoginResponse, err
 		return nil, fmt.Errorf("token generation failed")
 	}
 
-	return &models.LoginResponse{
+	return &LoginResponse{
 		Token:     signed,
 		Officer:   officer,
 		ExpiresAt: expiresAt,
@@ -107,8 +105,8 @@ func (s *AuthService) ValidateToken(tokenStr string) (*Claims, error) {
 }
 
 // GetOfficerByID fetches officer details
-func (s *AuthService) GetOfficerByID(id string) (*models.BoothOfficer, error) {
-	fs := fb.Get().Firestore
+func (s *AuthService) GetOfficerByID(id string) (*BoothOfficer, error) {
+	fs := Get().Firestore
 	doc, err := fs.Collection(ColOfficers).Doc(id).Get(s.ctx)
 	if err != nil {
 		if status.Code(err) == codes.NotFound {
@@ -116,7 +114,7 @@ func (s *AuthService) GetOfficerByID(id string) (*models.BoothOfficer, error) {
 		}
 		return nil, err
 	}
-	var officer models.BoothOfficer
+	var officer BoothOfficer
 	if err := doc.DataTo(&officer); err != nil {
 		return nil, err
 	}

@@ -1,21 +1,18 @@
-package handlers
+package main
 
 import (
 	"net/http"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
-	"github.com/eci/voter-verification/internal/middleware"
-	"github.com/eci/voter-verification/internal/models"
-	"github.com/eci/voter-verification/internal/services"
 )
 
 type Handler struct {
-	voterSvc *services.VoterService
-	authSvc  *services.AuthService
+	voterSvc *VoterService
+	authSvc  *AuthService
 }
 
-func New(voterSvc *services.VoterService, authSvc *services.AuthService) *Handler {
+func NewHandler(voterSvc *VoterService, authSvc *AuthService) *Handler {
 	return &Handler{voterSvc: voterSvc, authSvc: authSvc}
 }
 
@@ -33,9 +30,9 @@ func (h *Handler) HealthCheck(c *gin.Context) {
 // POST /api/v1/auth/login
 // Body: { "employee_code": "ECI-MH-042", "password": "officer123" }
 func (h *Handler) Login(c *gin.Context) {
-	var req models.LoginRequest
+	var req LoginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse{
+		c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error:   "INVALID_REQUEST",
 			Message: err.Error(),
 		})
@@ -44,7 +41,7 @@ func (h *Handler) Login(c *gin.Context) {
 
 	resp, err := h.authSvc.Login(req)
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, models.ErrorResponse{
+		c.JSON(http.StatusUnauthorized, ErrorResponse{
 			Error:   "AUTH_FAILED",
 			Message: "Invalid employee code or password",
 		})
@@ -60,7 +57,7 @@ func (h *Handler) Login(c *gin.Context) {
 func (h *Handler) LookupVoter(c *gin.Context) {
 	aadhaar := c.Query("aadhaar")
 	if len(aadhaar) != 12 {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse{
+		c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error:   "INVALID_AADHAAR",
 			Message: "Aadhaar number must be exactly 12 digits",
 		})
@@ -69,14 +66,14 @@ func (h *Handler) LookupVoter(c *gin.Context) {
 
 	voter, err := h.voterSvc.GetVoterByAadhaar(aadhaar)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse{
+		c.JSON(http.StatusInternalServerError, ErrorResponse{
 			Error:   "LOOKUP_ERROR",
 			Message: "Database error during voter lookup",
 		})
 		return
 	}
 	if voter == nil {
-		c.JSON(http.StatusNotFound, models.ErrorResponse{
+		c.JSON(http.StatusNotFound, ErrorResponse{
 			Error:   "NOT_FOUND",
 			Message: "No voter record found for this Aadhaar number",
 		})
@@ -91,9 +88,9 @@ func (h *Handler) LookupVoter(c *gin.Context) {
 // Body: { "aadhaar_number": "234567890123", "iris_scan": "IRIS_PRIYA_SHARMA_2024", "biometric_type": "IRIS" }
 // Requires: Authorization: Bearer <token>
 func (h *Handler) VerifyVoter(c *gin.Context) {
-	var req models.VerifyRequest
+	var req VerifyRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse{
+		c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error:   "INVALID_REQUEST",
 			Message: err.Error(),
 		})
@@ -108,7 +105,7 @@ func (h *Handler) VerifyVoter(c *gin.Context) {
 		}
 	}
 	if len(clean) != 12 {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse{
+		c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error:   "INVALID_AADHAAR",
 			Message: "Aadhaar number must be exactly 12 digits",
 		})
@@ -121,13 +118,13 @@ func (h *Handler) VerifyVoter(c *gin.Context) {
 	}
 
 	// Extract officer info from JWT context
-	officerID, _ := c.Get(middleware.CtxOfficerID)
-	boothID, _ := c.Get(middleware.CtxBoothID)
+	officerID, _ := c.Get(CtxOfficerID)
+	boothID, _ := c.Get(CtxBoothID)
 	ipAddr := c.ClientIP()
 
 	resp, err := h.voterSvc.VerifyVoter(req, officerID.(string), boothID.(string), ipAddr)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse{
+		c.JSON(http.StatusInternalServerError, ErrorResponse{
 			Error:   "VERIFICATION_ERROR",
 			Message: "Internal server error during verification",
 		})
@@ -136,9 +133,9 @@ func (h *Handler) VerifyVoter(c *gin.Context) {
 
 	// Return appropriate HTTP status
 	statusCode := http.StatusOK
-	if resp.Result == services.ResultNotFound {
+	if resp.Result == ResultNotFound {
 		statusCode = http.StatusNotFound
-	} else if resp.Result == services.ResultDuplicate || resp.Result == services.ResultWrongBooth || resp.Result == services.ResultBioFail {
+	} else if resp.Result == ResultDuplicate || resp.Result == ResultWrongBooth || resp.Result == ResultBioFail {
 		statusCode = http.StatusConflict
 	}
 
@@ -149,11 +146,11 @@ func (h *Handler) VerifyVoter(c *gin.Context) {
 // GET /api/v1/booth/dashboard
 // Returns live stats for the officer's assigned booth
 func (h *Handler) GetDashboard(c *gin.Context) {
-	boothID, _ := c.Get(middleware.CtxBoothID)
+	boothID, _ := c.Get(CtxBoothID)
 
 	stats, err := h.voterSvc.GetBoothStats(boothID.(string))
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse{
+		c.JSON(http.StatusInternalServerError, ErrorResponse{
 			Error:   "STATS_ERROR",
 			Message: "Failed to fetch booth statistics",
 		})
@@ -167,7 +164,7 @@ func (h *Handler) GetDashboard(c *gin.Context) {
 // GET /api/v1/booth/audit?limit=50
 // Returns audit logs for this booth
 func (h *Handler) GetAuditLogs(c *gin.Context) {
-	boothID, _ := c.Get(middleware.CtxBoothID)
+	boothID, _ := c.Get(CtxBoothID)
 	limit := 50
 	if l := c.Query("limit"); l != "" {
 		if parsed, err := strconv.Atoi(l); err == nil && parsed > 0 && parsed <= 200 {
@@ -177,7 +174,7 @@ func (h *Handler) GetAuditLogs(c *gin.Context) {
 
 	logs, err := h.voterSvc.GetAuditLogs(boothID.(string), limit)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse{
+		c.JSON(http.StatusInternalServerError, ErrorResponse{
 			Error:   "LOG_ERROR",
 			Message: "Failed to fetch audit logs",
 		})

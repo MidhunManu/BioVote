@@ -6,7 +6,7 @@ COPY go.mod go.sum ./
 RUN go mod download
 
 COPY . .
-RUN CGO_ENABLED=0 GOOS=linux go build -o voter-api ./cmd/main.go
+RUN CGO_ENABLED=0 GOOS=linux go build -o voter-api .
 
 # ── Production Stage ─────────────────────────────────────────
 FROM alpine:3.19
@@ -16,7 +16,6 @@ ENV TZ=Asia/Kolkata
 
 WORKDIR /app
 COPY --from=builder /app/voter-api .
-COPY --from=builder /app/.env.example .env.example
 
 EXPOSE 8080
 

@@ -1,4 +1,4 @@
-package services
+package main
 
 import (
 	"context"
@@ -10,8 +10,6 @@ import (
 
 	"cloud.google.com/go/firestore"
 	"github.com/google/uuid"
-	fb "github.com/eci/voter-verification/internal/firebase"
-	"github.com/eci/voter-verification/internal/models"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -42,7 +40,7 @@ type VoterService struct {
 func NewVoterService(ctx context.Context) *VoterService {
 	return &VoterService{
 		ctx: ctx,
-		fs:  fb.Get().Firestore,
+		fs:  Get().Firestore,
 	}
 }
 
@@ -67,7 +65,7 @@ func generateTxHash(aadhaarHash, result, boothID string, ts time.Time) string {
 }
 
 // VerifyVoter is the core verification function
-func (s *VoterService) VerifyVoter(req models.VerifyRequest, officerID, boothID, ipAddr string) (*models.VerifyResponse, error) {
+func (s *VoterService) VerifyVoter(req VerifyRequest, officerID, boothID, ipAddr string) (*VerifyResponse, error) {
 	aadhaarHash := hashAadhaar(req.AadhaarNumber)
 	now := time.Now()
 
@@ -75,7 +73,7 @@ func (s *VoterService) VerifyVoter(req models.VerifyRequest, officerID, boothID,
 	voterDoc, err := s.fs.Collection(ColVoters).Doc(aadhaarHash).Get(s.ctx)
 	if err != nil {
 		if status.Code(err) == codes.NotFound {
-			s.writeAuditLog(models.AuditLog{
+			s.writeAuditLog(AuditLog{
 				AadhaarHash:   aadhaarHash,
 				VoterName:     "UNKNOWN",
 				BoothID:       boothID,
@@ -86,7 +84,7 @@ func (s *VoterService) VerifyVoter(req models.VerifyRequest, officerID, boothID,
 				TxHash:        generateTxHash(aadhaarHash, ResultNotFound, boothID, now),
 				Timestamp:     now,
 			})
-			return &models.VerifyResponse{
+			return &VerifyResponse{
 				Result:    ResultNotFound,
 				Message:   "No voter record found for this Aadhaar number",
 				TxHash:    generateTxHash(aadhaarHash, ResultNotFound, boothID, now),
@@ -96,14 +94,14 @@ func (s *VoterService) VerifyVoter(req models.VerifyRequest, officerID, boothID,
 		return nil, fmt.Errorf("firestore lookup error: %w", err)
 	}
 
-	var voter models.Voter
+	var voter Voter
 	if err := voterDoc.DataTo(&voter); err != nil {
 		return nil, fmt.Errorf("voter data parse error: %w", err)
 	}
 
 	// 2. Check booth assignment
 	if voter.BoothID != boothID {
-		s.writeAuditLog(models.AuditLog{
+		s.writeAuditLog(AuditLog{
 			AadhaarHash:   aadhaarHash,
 			VoterName:     voter.Name,
 			VoterID:       voter.VoterID,
@@ -115,7 +113,7 @@ func (s *VoterService) VerifyVoter(req models.VerifyRequest, officerID, boothID,
 			TxHash:        generateTxHash(aadhaarHash, ResultWrongBooth, boothID, now),
 			Timestamp:     now,
 		})
-		return &models.VerifyResponse{
+		return &VerifyResponse{
 			Result:    ResultWrongBooth,
 			Message:   fmt.Sprintf("Voter is assigned to %s, not this booth", voter.BoothName),
 			Voter:     toPublic(voter),
@@ -127,7 +125,7 @@ func (s *VoterService) VerifyVoter(req models.VerifyRequest, officerID, boothID,
 	// 3. Check iris biometric (mock: compare hashes)
 	incomingIrisHash := hashIris(req.IrisScan)
 	if incomingIrisHash != voter.IrisTemplate {
-		s.writeAuditLog(models.AuditLog{
+		s.writeAuditLog(AuditLog{
 			AadhaarHash:   aadhaarHash,
 			VoterName:     voter.Name,
 			VoterID:       voter.VoterID,
@@ -139,7 +137,7 @@ func (s *VoterService) VerifyVoter(req models.VerifyRequest, officerID, boothID,
 			TxHash:        generateTxHash(aadhaarHash, ResultBioFail, boothID, now),
 			Timestamp:     now,
 		})
-		return &models.VerifyResponse{
+		return &VerifyResponse{
 			Result:    ResultBioFail,
 			Message:   "Biometric verification failed — iris mismatch",
 			TxHash:    generateTxHash(aadhaarHash, ResultBioFail, boothID, now),
@@ -149,7 +147,7 @@ func (s *VoterService) VerifyVoter(req models.VerifyRequest, officerID, boothID,
 
 	// 4. Check duplicate vote
 	if voter.HasVoted {
-		s.writeAuditLog(models.AuditLog{
+		s.writeAuditLog(AuditLog{
 			AadhaarHash:   aadhaarHash,
 			VoterName:     voter.Name,
 			VoterID:       voter.VoterID,
@@ -161,7 +159,7 @@ func (s *VoterService) VerifyVoter(req models.VerifyRequest, officerID, boothID,
 			TxHash:        generateTxHash(aadhaarHash, ResultDuplicate, boothID, now),
 			Timestamp:     now,
 		})
-		return &models.VerifyResponse{
+		return &VerifyResponse{
 			Result:    ResultDuplicate,
 			Message:   fmt.Sprintf("Vote already cast at %s", voter.VotedAt.Format(time.RFC3339)),
 			Voter:     toPublic(voter),
@@ -179,7 +177,7 @@ func (s *VoterService) VerifyVoter(req models.VerifyRequest, officerID, boothID,
 		if err != nil {
 			return err
 		}
-		var latestVoter models.Voter
+		var latestVoter Voter
 		if err := snap.DataTo(&latestVoter); err != nil {
 			return err
 		}
@@ -193,7 +191,7 @@ func (s *VoterService) VerifyVoter(req models.VerifyRequest, officerID, boothID,
 	})
 
 	if err != nil && err.Error() == "DUPLICATE_RACE" {
-		return &models.VerifyResponse{
+		return &VerifyResponse{
 			Result:    ResultDuplicate,
 			Message:   "Concurrent duplicate vote attempt detected",
 			Voter:     toPublic(voter),
@@ -211,7 +209,7 @@ func (s *VoterService) VerifyVoter(req models.VerifyRequest, officerID, boothID,
 	// 7. Write success audit log
 	voter.HasVoted = true
 	voter.VotedAt = &now
-	s.writeAuditLog(models.AuditLog{
+	s.writeAuditLog(AuditLog{
 		AadhaarHash:   aadhaarHash,
 		VoterName:     voter.Name,
 		VoterID:       voter.VoterID,
@@ -225,7 +223,7 @@ func (s *VoterService) VerifyVoter(req models.VerifyRequest, officerID, boothID,
 		Timestamp:     now,
 	})
 
-	return &models.VerifyResponse{
+	return &VerifyResponse{
 		Result:    ResultVerified,
 		Message:   "Voter successfully verified. Proceed to ballot.",
 		Voter:     toPublic(voter),
@@ -235,7 +233,7 @@ func (s *VoterService) VerifyVoter(req models.VerifyRequest, officerID, boothID,
 }
 
 // GetVoterByAadhaar retrieves voter info (for officer display before biometric)
-func (s *VoterService) GetVoterByAadhaar(aadhaarNumber string) (*models.VoterPublic, error) {
+func (s *VoterService) GetVoterByAadhaar(aadhaarNumber string) (*VoterPublic, error) {
 	hash := hashAadhaar(aadhaarNumber)
 	doc, err := s.fs.Collection(ColVoters).Doc(hash).Get(s.ctx)
 	if err != nil {
@@ -244,7 +242,7 @@ func (s *VoterService) GetVoterByAadhaar(aadhaarNumber string) (*models.VoterPub
 		}
 		return nil, err
 	}
-	var voter models.Voter
+	var voter Voter
 	if err := doc.DataTo(&voter); err != nil {
 		return nil, err
 	}
@@ -252,12 +250,12 @@ func (s *VoterService) GetVoterByAadhaar(aadhaarNumber string) (*models.VoterPub
 }
 
 // GetBoothStats returns live dashboard stats for a booth
-func (s *VoterService) GetBoothStats(boothID string) (*models.DashboardStats, error) {
+func (s *VoterService) GetBoothStats(boothID string) (*DashboardStats, error) {
 	doc, err := s.fs.Collection(ColBooths).Doc(boothID).Get(s.ctx)
 	if err != nil {
 		return nil, err
 	}
-	var booth models.Booth
+	var booth Booth
 	if err := doc.DataTo(&booth); err != nil {
 		return nil, err
 	}
@@ -265,7 +263,7 @@ func (s *VoterService) GetBoothStats(boothID string) (*models.DashboardStats, er
 	if booth.TotalVoters > 0 {
 		turnout = float64(booth.VotesCast) / float64(booth.TotalVoters) * 100
 	}
-	return &models.DashboardStats{
+	return &DashboardStats{
 		BoothID:     booth.ID,
 		BoothName:   booth.Name,
 		TotalVoters: booth.TotalVoters,
@@ -277,7 +275,7 @@ func (s *VoterService) GetBoothStats(boothID string) (*models.DashboardStats, er
 }
 
 // GetAuditLogs returns paginated audit logs for a booth
-func (s *VoterService) GetAuditLogs(boothID string, limit int) ([]models.AuditLog, error) {
+func (s *VoterService) GetAuditLogs(boothID string, limit int) ([]AuditLog, error) {
 	query := s.fs.Collection(ColAudit).
 		Where("booth_id", "==", boothID).
 		OrderBy("timestamp", firestore.Desc).
@@ -287,9 +285,9 @@ func (s *VoterService) GetAuditLogs(boothID string, limit int) ([]models.AuditLo
 	if err != nil {
 		return nil, err
 	}
-	var logs []models.AuditLog
+	var logs []AuditLog
 	for _, d := range docs {
-		var l models.AuditLog
+		var l AuditLog
 		if err := d.DataTo(&l); err != nil {
 			continue
 		}
@@ -300,7 +298,7 @@ func (s *VoterService) GetAuditLogs(boothID string, limit int) ([]models.AuditLo
 
 // ---- Internal helpers ----
 
-func (s *VoterService) writeAuditLog(log models.AuditLog) {
+func (s *VoterService) writeAuditLog(log AuditLog) {
 	log.ID = uuid.New().String()
 	_, err := s.fs.Collection(ColAudit).Doc(log.ID).Set(s.ctx, log)
 	if err != nil {
@@ -317,8 +315,8 @@ func (s *VoterService) incrementBoothCount(boothID string) {
 	}
 }
 
-func toPublic(v models.Voter) *models.VoterPublic {
-	return &models.VoterPublic{
+func toPublic(v Voter) *VoterPublic {
+	return &VoterPublic{
 		Name:         v.Name,
 		VoterID:      v.VoterID,
 		DOB:          v.DOB,
@@ -335,11 +333,11 @@ func toPublic(v models.Voter) *models.VoterPublic {
 
 // SeedMockData populates Firestore with hackathon demo data
 func SeedMockData(ctx context.Context) {
-	fs := fb.Get().Firestore
+	fs := Get().Firestore
 	log.Println("🌱 Seeding mock data...")
 
 	// Seed booth
-	booth := models.Booth{
+	booth := Booth{
 		ID:           "BOOTH-42",
 		Name:         "Booth 42 - Andheri East",
 		Constituency: "Mumbai North",
@@ -352,7 +350,7 @@ func SeedMockData(ctx context.Context) {
 
 	// Seed officer
 	officerPwHash := fmt.Sprintf("%x", sha256.Sum256([]byte("officer123")))
-	officer := models.BoothOfficer{
+	officer := BoothOfficer{
 		ID:           "OFF-001",
 		Name:         "Rajesh Kumar",
 		EmployeeCode: "ECI-MH-042",
@@ -369,16 +367,16 @@ func SeedMockData(ctx context.Context) {
 	voters := []struct {
 		aadhaar string
 		iris    string
-		voter   models.Voter
+		voter   Voter
 	}{
-		{"234567890123", "IRIS_PRIYA_SHARMA_2024", models.Voter{Name: "Priya Sharma", DOB: "14/03/1988", Gender: "Female", VoterID: "MH/23/142/098765", Constituency: "Mumbai North", BoothID: "BOOTH-42", BoothName: "Booth 42 - Andheri East", Address: "12, Linking Road, Bandra West, Mumbai - 400050", HasVoted: false}},
-		{"345678901234", "IRIS_RAHUL_MEHTA_2024", models.Voter{Name: "Rahul Mehta", DOB: "22/07/1975", Gender: "Male", VoterID: "MH/23/142/112233", Constituency: "Mumbai North", BoothID: "BOOTH-42", BoothName: "Booth 42 - Andheri East", Address: "45, MG Road, Andheri East, Mumbai - 400069", HasVoted: false}},
-		{"456789012345", "IRIS_ANANYA_KRISHNAN_2024", models.Voter{Name: "Ananya Krishnan", DOB: "05/11/1992", Gender: "Female", VoterID: "MH/23/142/334455", Constituency: "Mumbai North", BoothID: "BOOTH-42", BoothName: "Booth 42 - Andheri East", Address: "78, Marol Naka, Andheri East, Mumbai - 400059", HasVoted: false}},
-		{"567890123456", "IRIS_VIKRAM_SINGH_2024", models.Voter{Name: "Vikram Singh", DOB: "30/01/1965", Gender: "Male", VoterID: "MH/23/142/556677", Constituency: "Mumbai North", BoothID: "BOOTH-42", BoothName: "Booth 42 - Andheri East", Address: "3, Chakala, Andheri East, Mumbai - 400093", HasVoted: false}},
-		{"678901234567", "IRIS_MEENA_PATEL_2024", models.Voter{Name: "Meena Patel", DOB: "18/09/1980", Gender: "Female", VoterID: "MH/23/142/778899", Constituency: "Mumbai North", BoothID: "BOOTH-42", BoothName: "Booth 42 - Andheri East", Address: "22, MIDC, Andheri East, Mumbai - 400093", HasVoted: false}},
-		{"789012345678", "IRIS_ARJUN_NAIR_2024", models.Voter{Name: "Arjun Nair", DOB: "11/04/1998", Gender: "Male", VoterID: "MH/23/142/990011", Constituency: "Mumbai North", BoothID: "BOOTH-42", BoothName: "Booth 42 - Andheri East", Address: "9, JB Nagar, Andheri East, Mumbai - 400059", HasVoted: false}},
-		{"890123456789", "IRIS_SUNITA_REDDY_2024", models.Voter{Name: "Sunita Reddy", DOB: "27/06/1955", Gender: "Female", VoterID: "MH/23/142/221133", Constituency: "Mumbai North", BoothID: "BOOTH-42", BoothName: "Booth 42 - Andheri East", Address: "56, Saki Naka, Andheri East, Mumbai - 400072", HasVoted: true}},
-		{"901234567890", "IRIS_DEEPAK_JOSHI_2024", models.Voter{Name: "Deepak Joshi", DOB: "03/12/1970", Gender: "Male", VoterID: "MH/23/142/443355", Constituency: "Mumbai North", BoothID: "BOOTH-42", BoothName: "Booth 42 - Andheri East", Address: "11, Powai, Andheri East, Mumbai - 400076", HasVoted: false}},
+		{"234567890123", "IRIS_PRIYA_SHARMA_2024", Voter{Name: "Priya Sharma", DOB: "14/03/1988", Gender: "Female", VoterID: "MH/23/142/098765", Constituency: "Mumbai North", BoothID: "BOOTH-42", BoothName: "Booth 42 - Andheri East", Address: "12, Linking Road, Bandra West, Mumbai - 400050", HasVoted: false}},
+		{"345678901234", "IRIS_RAHUL_MEHTA_2024", Voter{Name: "Rahul Mehta", DOB: "22/07/1975", Gender: "Male", VoterID: "MH/23/142/112233", Constituency: "Mumbai North", BoothID: "BOOTH-42", BoothName: "Booth 42 - Andheri East", Address: "45, MG Road, Andheri East, Mumbai - 400069", HasVoted: false}},
+		{"456789012345", "IRIS_ANANYA_KRISHNAN_2024", Voter{Name: "Ananya Krishnan", DOB: "05/11/1992", Gender: "Female", VoterID: "MH/23/142/334455", Constituency: "Mumbai North", BoothID: "BOOTH-42", BoothName: "Booth 42 - Andheri East", Address: "78, Marol Naka, Andheri East, Mumbai - 400059", HasVoted: false}},
+		{"567890123456", "IRIS_VIKRAM_SINGH_2024", Voter{Name: "Vikram Singh", DOB: "30/01/1965", Gender: "Male", VoterID: "MH/23/142/556677", Constituency: "Mumbai North", BoothID: "BOOTH-42", BoothName: "Booth 42 - Andheri East", Address: "3, Chakala, Andheri East, Mumbai - 400093", HasVoted: false}},
+		{"678901234567", "IRIS_MEENA_PATEL_2024", Voter{Name: "Meena Patel", DOB: "18/09/1980", Gender: "Female", VoterID: "MH/23/142/778899", Constituency: "Mumbai North", BoothID: "BOOTH-42", BoothName: "Booth 42 - Andheri East", Address: "22, MIDC, Andheri East, Mumbai - 400093", HasVoted: false}},
+		{"789012345678", "IRIS_ARJUN_NAIR_2024", Voter{Name: "Arjun Nair", DOB: "11/04/1998", Gender: "Male", VoterID: "MH/23/142/990011", Constituency: "Mumbai North", BoothID: "BOOTH-42", BoothName: "Booth 42 - Andheri East", Address: "9, JB Nagar, Andheri East, Mumbai - 400059", HasVoted: false}},
+		{"890123456789", "IRIS_SUNITA_REDDY_2024", Voter{Name: "Sunita Reddy", DOB: "27/06/1955", Gender: "Female", VoterID: "MH/23/142/221133", Constituency: "Mumbai North", BoothID: "BOOTH-42", BoothName: "Booth 42 - Andheri East", Address: "56, Saki Naka, Andheri East, Mumbai - 400072", HasVoted: true}},
+		{"901234567890", "IRIS_DEEPAK_JOSHI_2024", Voter{Name: "Deepak Joshi", DOB: "03/12/1970", Gender: "Male", VoterID: "MH/23/142/443355", Constituency: "Mumbai North", BoothID: "BOOTH-42", BoothName: "Booth 42 - Andheri East", Address: "11, Powai, Andheri East, Mumbai - 400076", HasVoted: false}},
 	}
 
 	for _, v := range voters {

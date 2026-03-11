@@ -1,0 +1,24 @@
+# Firebase / secrets
+*.json
+!firestore.indexes.json
+
+# Service account keys
+*firebase-adminsdk*.json
+
+# Binaries / builds
+voter-verification
+*.exe
+*.out
+*.bin
+
+# OS
+.DS_Store
+
+# Go
+vendor/
+*.test
+*.log
+
+# IDE
+.vscode/
+.idea/

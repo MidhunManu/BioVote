@@ -1,11 +1,10 @@
-package middleware
+package main
 
 import (
 	"net/http"
 	"strings"
 
 	"github.com/gin-gonic/gin"
-	"github.com/eci/voter-verification/internal/services"
 )
 
 const (
@@ -16,7 +15,7 @@ const (
 )
 
 // AuthMiddleware validates JWT tokens on protected routes
-func AuthMiddleware(authSvc *services.AuthService) gin.HandlerFunc {
+func AuthMiddleware(authSvc *AuthService) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		authHeader := c.GetHeader("Authorization")
 		if authHeader == "" {
@@ -61,8 +60,16 @@ func RoleRequired(roles ...string) gin.HandlerFunc {
 		allowed[r] = true
 	}
 	return func(c *gin.Context) {
-		role, _ := c.Get(CtxRole)
-		if !allowed[role.(string)] {
+		roleVal, exists := c.Get(CtxRole)
+		if !exists {
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
+				"error":   "FORBIDDEN",
+				"message": "Role not found in context",
+			})
+			return
+		}
+		role, ok := roleVal.(string)
+		if !ok || !allowed[role] {
 			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
 				"error":   "FORBIDDEN",
 				"message": "Insufficient permissions for this action",
