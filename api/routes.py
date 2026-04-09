@@ -1,6 +1,7 @@
 from fastapi import (
   APIRouter,
   Depends,
+  HTTPException,
   Query,
   status,
   Request,
@@ -62,9 +63,7 @@ async def logout_admin(
 ):
   authUserId, _ = auth
   if authUserId != userId:
-    return {
-      'statusCode' : status.HTTP_403_FORBIDDEN,
-    }
+    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
   await Auth().invalidate_user(userId, db)
   return {
     'statusCode' : status.HTTP_204_NO_CONTENT,
@@ -167,6 +166,7 @@ async def get_voter_by_aadhaar(
 
 @ROUTER.post('/votes/record', status_code=status.HTTP_202_ACCEPTED)
 async def record_vote(
+  http_request: Request,
   request: RecordVoteRequest,
   db = Depends(get_db),
   auth: tuple[str, str] = Depends(require_officer),
@@ -178,7 +178,7 @@ async def record_vote(
     voterId=request.voterId,
     aadhaarHash=request.aadhaarHash,
     biometricType=request.biometricType,
-    ipAddress=request.ipAddress,
+    ipAddress=http_request.client.host if http_request.client else None,
     txHash=request.txHash,
     result=request.result,
   )
